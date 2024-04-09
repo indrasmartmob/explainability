@@ -10,15 +10,31 @@ import numpy as np
 import pandas as pd
 import scipy
 import seaborn as sns
+import sys
+from pathlib import Path
+file_path = Path(__file__)
+parent_directory_path = file_path.parent.parent
+logurupath=str(parent_directory_path)+"\loguru-master"
+sys.path.insert(0,logurupath)
 from loguru import logger
 from matplotlib.patches import Rectangle
 from scipy.spatial import cKDTree
 
-logger.disable("alepython")
+# logger.disable("alepython")
 
 
-__all__ = ("ale_plot",)
+# __all__ = ("ale_plot","fn_check")
 
+def fn_check():
+    logger.info("In the fn_check method")
+    logger.trace("A trace message.")
+    logger.debug("A debug message.")
+    logger.info("An info message.")
+    logger.success("A success message.")
+    logger.warning("A warning message.")
+    logger.error("An error message.")
+    logger.critical("A critical message.")
+    return None
 
 def _parse_features(features):
     """Standardise representation of column labels.

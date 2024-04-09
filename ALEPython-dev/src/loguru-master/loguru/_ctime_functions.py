@@ -1,5 +1,10 @@
 import os
-
+import sys
+from pathlib import Path
+file_path = Path(__file__)
+parent_directory_path = file_path.parent.parent.parent
+win32setctimepath=str(parent_directory_path)+"\win32-setctime-master"
+sys.path.insert(0,win32setctimepath)
 
 def load_ctime_functions():
     if os.name == "nt":
