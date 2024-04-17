@@ -3,7 +3,31 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.transforms as mtrans
 
+import glob
+import sys
+from pathlib import Path
+file_path = Path(__file__)
+parent_directory_path = file_path.parent.parent.parent
+logurupath=str(parent_directory_path)+"\loguru-master"
+sys.path.insert(0,logurupath)
+from loguru import logger
+# logger.disable("PyALE")
+
 from .lib import quantile_ied, CI_estimate, order_groups
+
+def fn_check(disable=False):
+    logger.info("This line will not come if logger.disable is done in the start of the file")
+    if disable==True:
+        logger.disable("PyALE")
+    logger.info("In the fn_check method")
+    logger.trace("A trace message.")
+    logger.debug("A debug message.")
+    logger.info("An info message.")
+    logger.success("A success message.")
+    logger.warning("A warning message.")
+    logger.error("An error message.")
+    logger.critical("A critical message.")
+    return None
 
 
 def aleplot_1D_continuous(X, model, feature, grid_size=20, include_CI=True, C=0.95):
