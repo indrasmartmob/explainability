@@ -22,7 +22,7 @@ def fn_check(disable=False):
     return None
 
 
-def aleplot_1D_continuous(X, model, feature, grid_size=20, include_CI=True, C=0.95):
+def aleplot_1D_continuous(X:pd.DataFrame, model, feature:str, grid_size:int=20, include_CI:bool=True, C:float=0.95):
     """Compute the accumulated local effect of a numeric continuous feature.
 
     This function divides the feature in question into grid_size intervals (bins)
@@ -43,15 +43,24 @@ def aleplot_1D_continuous(X, model, feature, grid_size=20, include_CI=True, C=0.
     and the accumulated centered effect of this bin.
     """
     logger.info(F"Starting of {aleplot_1D_continuous.__qualname__}")
+    logger.debug(F"Start: Data types check of the function")
+    if type(X)!=type(pd.DataFrame()):
+        raise TypeError(f"type of X should be a {type(pd.DataFrame())}")
+    
+    if type(feature)!=type('str'):
+        raise TypeError(f"type of feature should be a {type('str')}")
+    
+    logger.debug(F"End: Data types check of the function")
     quantiles = np.linspace(0, 1, grid_size + 1, endpoint=True)
     logger.debug(F"quantiles:{quantiles}")
     # use customized quantile function to get the same result as
     # type 1 R quantile (Inverse of empirical distribution function)
+    logger.debug(f"type(X[feature]):{type(X[feature])}")
     bins = [X[feature].min()] + quantile_ied(X[feature], quantiles).to_list()
-    logger.debug(F"bins:{bins}")
+    logger.debug(F"bins count: {len(bins)}, bins:{bins}")
     bins = np.unique(bins)
-    logger.debug(F"unique_bins:{bins}")
-    # feat_cut = pd.cut(X[feature], bins, include_lowest=True)
+    logger.debug(F"unique_bins count: {len(bins)}, unique_bins:{bins}")
+    feat_cut = pd.cut(X[feature], bins, include_lowest=True)
 
     # bin_codes = feat_cut.cat.codes
     # bin_codes_unique = np.unique(bin_codes)
