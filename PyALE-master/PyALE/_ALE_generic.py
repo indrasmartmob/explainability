@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
-import logging
+# import logging
+from .logfile import logger
 
 from ._src.ALE_1D import (
     aleplot_1D_continuous,
@@ -11,9 +12,9 @@ from ._src.ALE_1D import (
 )
 from ._src.ALE_2D import aleplot_2D_continuous, plot_2D_continuous_eff
 
-logger = logging.getLogger(__name__)
-logger.setLevel(level=logging.INFO)
-logging.basicConfig(format="%(name)s:%(levelname)s: %(message)s")
+# logger = logging.getLogger(__name__)
+# logger.setLevel(level=logging.INFO)
+# logging.basicConfig(format="%(name)s:%(levelname)s: %(message)s")
 
 
 def ale(

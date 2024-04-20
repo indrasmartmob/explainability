@@ -3,6 +3,7 @@ import pandas as pd
 from statsmodels.distributions.empirical_distribution import ECDF
 from scipy.stats import t
 
+from ..logfile import logger
 
 def cmds(D, k=2):
     """Classical multidimensional scaling
@@ -116,7 +117,8 @@ def quantile_ied(x_vec, q):
     x_vec -- A pandas series containing the values to compute the quantile for
     q -- An array of probabilities (values between 0 and 1)
     """
-
+    logger.info(F"Starting of {quantile_ied.__qualname__}")
+    logger.debug(F"x_vec[:5]:{x_vec[:5]}")
     x_vec = x_vec.sort_values()
     n = len(x_vec) - 1
     m = 0

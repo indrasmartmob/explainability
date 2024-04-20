@@ -3,7 +3,24 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.transforms as mtrans
 
+from ..logfile import logger
+
 from .lib import quantile_ied, CI_estimate, order_groups
+
+def fn_check(disable=False):
+    logger.info("This line will not come if logger.disable is done in the start of the file")
+    if disable==True:
+        logger.disable("PyALE")
+    logger.info("In the fn_check method")
+    logger.trace("A trace message.")
+    logger.debug("A debug message.")
+    logger.info("An info message.")
+    logger.success("A success message.")
+    logger.warning("A warning message.")
+    logger.error("An error message.")
+    logger.critical("A critical message.")
+    return None
+
 
 def aleplot_1D_continuous(X, model, feature, grid_size=20, include_CI=True, C=0.95):
     """Compute the accumulated local effect of a numeric continuous feature.
@@ -25,52 +42,56 @@ def aleplot_1D_continuous(X, model, feature, grid_size=20, include_CI=True, C=0.
     Return: A pandas DataFrame containing for each bin: the size of the sample in it
     and the accumulated centered effect of this bin.
     """
-
+    logger.info(F"Starting of {aleplot_1D_continuous.__qualname__}")
     quantiles = np.linspace(0, 1, grid_size + 1, endpoint=True)
+    logger.debug(F"quantiles:{quantiles}")
     # use customized quantile function to get the same result as
     # type 1 R quantile (Inverse of empirical distribution function)
     bins = [X[feature].min()] + quantile_ied(X[feature], quantiles).to_list()
+    logger.debug(F"bins:{bins}")
     bins = np.unique(bins)
-    feat_cut = pd.cut(X[feature], bins, include_lowest=True)
+    logger.debug(F"unique_bins:{bins}")
+    # feat_cut = pd.cut(X[feature], bins, include_lowest=True)
 
-    bin_codes = feat_cut.cat.codes
-    bin_codes_unique = np.unique(bin_codes)
+    # bin_codes = feat_cut.cat.codes
+    # bin_codes_unique = np.unique(bin_codes)
 
-    X1 = X.copy()
-    X2 = X.copy()
-    X1[feature] = [bins[i] for i in bin_codes]
-    X2[feature] = [bins[i + 1] for i in bin_codes]
-    try:
-        y_1 = model.predict(X1).ravel()
-        y_2 = model.predict(X2).ravel()
-    except Exception as ex:
-        raise Exception(
-            "Please check that your model is fitted, and accepts X as input."
-        )
+    # X1 = X.copy()
+    # X2 = X.copy()
+    # X1[feature] = [bins[i] for i in bin_codes]
+    # X2[feature] = [bins[i + 1] for i in bin_codes]
+    # try:
+    #     y_1 = model.predict(X1).ravel()
+    #     y_2 = model.predict(X2).ravel()
+    # except Exception as ex:
+    #     raise Exception(
+    #         "Please check that your model is fitted, and accepts X as input."
+    #     )
 
-    delta_df = pd.DataFrame({feature: bins[bin_codes + 1], "Delta": y_2 - y_1})
-    res_df = delta_df.groupby([feature], observed=False).Delta.agg(
-        [("eff", "mean"), "size"]
-    )
-    res_df["eff"] = res_df["eff"].cumsum()
-    res_df.loc[min(bins), :] = 0
-    # subtract the total average of a moving average of size 2
-    mean_mv_avg = (
-        (res_df["eff"] + res_df["eff"].shift(1, fill_value=0)) / 2 * res_df["size"]
-    ).sum() / res_df["size"].sum()
-    res_df = res_df.sort_index().assign(eff=res_df["eff"] - mean_mv_avg)
-    if include_CI:
-        ci_est = delta_df.groupby(feature, observed=False).Delta.agg(
-            [("CI_estimate", lambda x: CI_estimate(x, C=C))]
-        )
-        ci_est = ci_est.sort_index()
-        lowerCI_name = "lowerCI_" + str(int(C * 100)) + "%"
-        upperCI_name = "upperCI_" + str(int(C * 100)) + "%"
-        res_df[lowerCI_name] = res_df[["eff"]].subtract(ci_est["CI_estimate"], axis=0)
-        res_df[upperCI_name] = upperCI = res_df[["eff"]].add(
-            ci_est["CI_estimate"], axis=0
-        )
-    return res_df
+    # delta_df = pd.DataFrame({feature: bins[bin_codes + 1], "Delta": y_2 - y_1})
+    # res_df = delta_df.groupby([feature], observed=False).Delta.agg(
+    #     [("eff", "mean"), "size"]
+    # )
+    # res_df["eff"] = res_df["eff"].cumsum()
+    # res_df.loc[min(bins), :] = 0
+    # # subtract the total average of a moving average of size 2
+    # mean_mv_avg = (
+    #     (res_df["eff"] + res_df["eff"].shift(1, fill_value=0)) / 2 * res_df["size"]
+    # ).sum() / res_df["size"].sum()
+    # res_df = res_df.sort_index().assign(eff=res_df["eff"] - mean_mv_avg)
+    # if include_CI:
+    #     ci_est = delta_df.groupby(feature, observed=False).Delta.agg(
+    #         [("CI_estimate", lambda x: CI_estimate(x, C=C))]
+    #     )
+    #     ci_est = ci_est.sort_index()
+    #     lowerCI_name = "lowerCI_" + str(int(C * 100)) + "%"
+    #     upperCI_name = "upperCI_" + str(int(C * 100)) + "%"
+    #     res_df[lowerCI_name] = res_df[["eff"]].subtract(ci_est["CI_estimate"], axis=0)
+    #     res_df[upperCI_name] = upperCI = res_df[["eff"]].add(
+    #         ci_est["CI_estimate"], axis=0
+    #     )
+    # return res_df
+    return None
 
 
 def aleplot_1D_discrete(X, model, feature, include_CI=True, C=0.95):
