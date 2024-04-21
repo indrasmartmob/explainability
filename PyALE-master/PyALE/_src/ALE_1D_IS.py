@@ -3,7 +3,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.transforms as mtrans
 
-from ..logfile import logger
+from ..logfile import logger, log_enable, log_disable
 
 from .lib import quantile_ied, CI_estimate, order_groups
 
@@ -22,7 +22,7 @@ def fn_check(disable=False):
     return None
 
 
-def aleplot_1D_continuous(X:pd.DataFrame, model, feature:str, grid_size:int=20, include_CI:bool=True, C:float=0.95):
+def aleplot_1D_continuous(X:pd.DataFrame, model, feature:str, grid_size:int=20, include_CI:bool=True, C:float=0.95, verbose:bool=False):
     """Compute the accumulated local effect of a numeric continuous feature.
 
     This function divides the feature in question into grid_size intervals (bins)
@@ -42,65 +42,114 @@ def aleplot_1D_continuous(X:pd.DataFrame, model, feature:str, grid_size:int=20, 
     Return: A pandas DataFrame containing for each bin: the size of the sample in it
     and the accumulated centered effect of this bin.
     """
+    if verbose==True:
+        log_enable()
+    elif verbose==False:
+        log_disable()
+    else :
+        log_disable()
+    
     logger.info(F"Starting of {aleplot_1D_continuous.__qualname__}")
-    logger.debug(F"Start: Data types check of the function")
+    logger.warning(F"Start: Data types check of the function")
     if type(X)!=type(pd.DataFrame()):
         raise TypeError(f"type of X should be a {type(pd.DataFrame())}")
     
     if type(feature)!=type('str'):
         raise TypeError(f"type of feature should be a {type('str')}")
     
-    logger.debug(F"End: Data types check of the function")
+    logger.warning(F"End: Data types check of the function")
     quantiles = np.linspace(0, 1, grid_size + 1, endpoint=True)
-    logger.debug(F"quantiles:{quantiles}")
+    logger.debug(F"quantiles count:{len(quantiles)},quantiles:{quantiles}")
     # use customized quantile function to get the same result as
     # type 1 R quantile (Inverse of empirical distribution function)
     logger.debug(f"type(X[feature]):{type(X[feature])}")
     bins = [X[feature].min()] + quantile_ied(X[feature], quantiles).to_list()
-    logger.debug(F"bins count: {len(bins)}, bins:{bins}")
+    logger.debug(F"bins count: {len(bins)}, bins:{bins}, bins[:4]:{bins[:4]}")
     bins = np.unique(bins)
-    logger.debug(F"unique_bins count: {len(bins)}, unique_bins:{bins}")
+    logger.debug(F"unique_bins count: {len(bins)}, unique_bins:{bins}, unique_bins[:4]:{bins[:4]}")
     feat_cut = pd.cut(X[feature], bins, include_lowest=True)
+    logger.debug(F"type(X[feature]):{type(X[feature])}, X[feature].shape:{X[feature].shape}, X[feature][:5]:{X[feature][:5]}")
+    logger.debug(F"type(feat_cut):{type(feat_cut)},feat_cut.shape:{feat_cut.shape} feat_cut[:5]:{feat_cut[:5]}")
 
-    # bin_codes = feat_cut.cat.codes
-    # bin_codes_unique = np.unique(bin_codes)
+    bin_codes = feat_cut.cat.codes
+    logger.debug(f"type(feat_cut.cat):{feat_cut.cat}, type(feat_cut.cat.codes):{type(feat_cut.cat.codes)}")
+    logger.debug(F"bin_codes count:{len(bin_codes)}, type(bin_codes):{type(bin_codes)}, bin_codes[:2]:{bin_codes[:2]}")
+    bin_codes_unique = np.unique(bin_codes)
+    logger.debug(F"type(bin_codes_unique):{type(bin_codes_unique)}, bin_codes_unique[:2]:{bin_codes_unique[:2]}")
 
-    # X1 = X.copy()
-    # X2 = X.copy()
-    # X1[feature] = [bins[i] for i in bin_codes]
-    # X2[feature] = [bins[i + 1] for i in bin_codes]
-    # try:
-    #     y_1 = model.predict(X1).ravel()
-    #     y_2 = model.predict(X2).ravel()
-    # except Exception as ex:
-    #     raise Exception(
-    #         "Please check that your model is fitted, and accepts X as input."
-    #     )
+    X1 = X.copy()
+    X2 = X.copy()
 
-    # delta_df = pd.DataFrame({feature: bins[bin_codes + 1], "Delta": y_2 - y_1})
-    # res_df = delta_df.groupby([feature], observed=False).Delta.agg(
-    #     [("eff", "mean"), "size"]
-    # )
-    # res_df["eff"] = res_df["eff"].cumsum()
-    # res_df.loc[min(bins), :] = 0
-    # # subtract the total average of a moving average of size 2
-    # mean_mv_avg = (
-    #     (res_df["eff"] + res_df["eff"].shift(1, fill_value=0)) / 2 * res_df["size"]
-    # ).sum() / res_df["size"].sum()
-    # res_df = res_df.sort_index().assign(eff=res_df["eff"] - mean_mv_avg)
-    # if include_CI:
-    #     ci_est = delta_df.groupby(feature, observed=False).Delta.agg(
-    #         [("CI_estimate", lambda x: CI_estimate(x, C=C))]
-    #     )
-    #     ci_est = ci_est.sort_index()
-    #     lowerCI_name = "lowerCI_" + str(int(C * 100)) + "%"
-    #     upperCI_name = "upperCI_" + str(int(C * 100)) + "%"
-    #     res_df[lowerCI_name] = res_df[["eff"]].subtract(ci_est["CI_estimate"], axis=0)
-    #     res_df[upperCI_name] = upperCI = res_df[["eff"]].add(
-    #         ci_est["CI_estimate"], axis=0
-    #     )
-    # return res_df
-    return None
+    temp_df = pd.DataFrame({"X1_bin_codes":[i for i in bin_codes],"X1_bin":[bins[i] for i in bin_codes],"X2_bin_codes":[i + 1 for i in bin_codes],"X2_bin":[bins[i + 1] for i in bin_codes]})
+    temp_df[feature]=X[feature].copy()
+    temp_df["lb_ub"]=feat_cut.copy()
+    temp_df = temp_df.loc[:,[feature, "lb_ub", "X1_bin_codes", "X1_bin", "X2_bin_codes", "X2_bin"]]
+    logger.debug(F"temp_df.shape:{temp_df.shape}")
+    logger.debug(F"temp_df.head(10):{temp_df.head(10)}")
+    temp_unique_df = temp_df.drop_duplicates(subset=["X1_bin_codes"], keep="first")
+    temp_unique_df.sort_values(by=["X1_bin_codes"], ascending=True, inplace=True)
+    temp_unique_df.reset_index(inplace=True)
+    temp_unique_df.drop(columns=["index"], inplace=True)
+    logger.debug(F"temp_unique_df.shape:{temp_unique_df.shape}")
+    logger.debug(F"temp_unique_df.head(grid_size):{temp_unique_df.head(grid_size)}") 
+
+    X1[feature] = [bins[i] for i in bin_codes]
+    X2[feature] = [bins[i + 1] for i in bin_codes]
+
+    try:
+        y_1 = model.predict(X1).ravel()
+        logger.debug(F"type(y_1):{type(y_1)}, y_1.size:{y_1.size}")
+        y_2 = model.predict(X2).ravel()
+        logger.debug(F"type(y_2):{type(y_2)}, y_2.size:{y_2.size}")
+    except Exception as ex:
+        raise Exception(
+            "Please check that your model is fitted, and accepts X as input."
+        )
+
+    local_effects_df = pd.DataFrame({feature: bins[bin_codes + 1], "Local_Effects": y_2 - y_1})
+    logger.debug(f"local_effects_df.shape,{local_effects_df.shape}, local_effects_df.head():{local_effects_df.head()}")
+    res_df = local_effects_df.groupby([feature], axis=0, observed=False)["Local_Effects"].agg([ "mean", "size"])
+    logger.debug(f"Before Renaming:::res_df.shape,{res_df.shape}, res_df.head():{res_df.head()}")
+    res_df.columns = ["local_mean_effects", "size"]
+    logger.debug(f"After Renaming:::res_df.shape,{res_df.shape}, res_df.head():{res_df.head()}")
+    res_df["Accumulated_local_mean_effects"] = res_df["local_mean_effects"].cumsum()
+    logger.debug(f"After Cumulative Sum:::res_df.shape,{res_df.shape}, res_df.head():{res_df.head()}")
+    logger.debug(f"res_df.shape:{res_df.shape}, res_df.tail():{res_df.tail()}")
+    res_df.loc[min(bins), :] = 0
+    logger.debug(f"After Adding min(bins) with 0 effect for starting point as the rows started from the upper bound of the first interval but we need to add the first row as the minimum:::res_df.shape,{res_df.shape}, res_df.head():{res_df.tail()}")
+    res_df = res_df.sort_index()
+    logger.debug(f"After sorting by index values:::res_df.shape:{res_df.shape}, res_df.head():{res_df.head()}")
+    logger.debug(f"As we have added another row so either the first bin or the last should have 0 frequency. Here we will take the last bin as 0 frequency. In this way the weighted average will be on the smaller side and this will give us more postitive values after the weighted mean centering")
+    res_df.rename(columns={"size":"size_original"}, inplace=True)
+    res_df["size"]=res_df["size_original"]
+    res_df["Weight"]=res_df["size_original"]
+    res_df["Weight"]=res_df["Weight"].shift(-1, fill_value=0)
+    # subtract the total average of a moving average of size 2
+    res_df["mid_point_of_two_consecutive_acuumulated_local_mean_effects"] = (res_df["Accumulated_local_mean_effects"] + res_df["Accumulated_local_mean_effects"].shift(-1, fill_value=0)) / 2
+    res_df["proportional_weight"] = res_df["Weight"]/res_df["Weight"].sum()
+    res_df["proportional_weight_times_mid_point_of_two_consecutive_acuumulated_local_mean_effects"] = res_df["proportional_weight"]*res_df["mid_point_of_two_consecutive_acuumulated_local_mean_effects"]
+    res_df["weighted_mean_of_accumulated_local_mean_effects"] = res_df["proportional_weight_times_mid_point_of_two_consecutive_acuumulated_local_mean_effects"].sum()
+    res_df["Weighted_mean_centered_ALE"]=res_df["Accumulated_local_mean_effects"]-res_df["weighted_mean_of_accumulated_local_mean_effects"]
+    logger.debug(f"Weighted_mean_centered_ALE:::res_df.shape:{res_df.shape}, res_df.head():{res_df.head()}")
+
+    if include_CI:
+        ci_est = local_effects_df.groupby(feature, axis=0, observed=False)["Local_Effects"].agg(
+            [("CI_estimate", lambda x: CI_estimate(x, C=C))]
+        )
+        logger.debug(f"Before Sorting Index:::ci_est.shape:{ci_est.shape}, ci_est.head(): {ci_est.head()}")
+        ci_est = ci_est.sort_index()
+        logger.debug(f"After Sorting Index:::ci_est.shape:{ci_est.shape}, ci_est.head(): {ci_est.head()}")
+        logger.debug(f"Before Merging Confidence Intervals with ALE table shape:::res_df.shape:{res_df.shape}")
+        res_df = res_df.merge(ci_est, how="left", left_index=True, right_index=True, validate="one_to_one")
+        logger.debug(f"After Merging Confidence Intervals with ALE table shape:::res_df.shape:{res_df.shape}")
+        lowerCI_name = "lowerCI_" + str(int(C * 100)) + "%"
+        upperCI_name = "upperCI_" + str(int(C * 100)) + "%"
+        for colname in ["local_mean_effects", "Accumulated_local_mean_effects", "Weighted_mean_centered_ALE"]:
+            res_df[f"{lowerCI_name}_{colname}"] = res_df[colname]-res_df["CI_estimate"]
+            res_df[f"{upperCI_name}_{colname}"] = res_df[colname]+res_df["CI_estimate"]
+    logger.debug(f"Confidence Intervals Added for all relevant columns:::res_df.shape:{res_df.shape}, res_df.head():{res_df.head()}")
+    logger.info(F"Ending of {aleplot_1D_continuous.__qualname__}")
+    return res_df
 
 
 def aleplot_1D_discrete(X, model, feature, include_CI=True, C=0.95):
