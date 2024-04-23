@@ -387,7 +387,7 @@ def aleplot_1D_categorical(
     return res_df
 
 
-def plot_1D_continuous_eff(res_df, X, fig=None, ax=None):
+def plot_1D_continuous_eff(res_df, X, fig=None, ax=None, verbose=False):
     """Plot the 1D ALE plot for a continuous feature.
 
     Arguments:
@@ -396,51 +396,79 @@ def plot_1D_continuous_eff(res_df, X, fig=None, ax=None):
     X -- The dataset used to compute the effects.
     fig, ax -- matplotlib figure and axis.
     """
+    if verbose==True:
+        log_enable()
+    elif verbose==False:
+        log_disable()
+    else :
+        log_disable()
 
+    logger.info(F"Starting of {plot_1D_continuous_eff.__qualname__}")
+    logger.debug(F"res_df.shape:{res_df.shape}, res_df.head():{res_df.head()}")
+    logger.debug(F"X.shape:{X.shape}, X.head():{X.head()}")
     feature_name = res_df.index.name
+    logger.debug(F"feature_name:{feature_name}, res_df.index.name:{res_df.index.name}")
     # position: jitter
     # to see the distribution of the data points clearer, each point x will be nudged a random value between
     # -minimum distance between two data points and +
-    sorted_values = X[feature_name].sort_values()
-    values_diff = abs(sorted_values.shift() - sorted_values)
+    logger.debug(f"type(X[feature_name]):{type(X[feature_name])}, X[feature_name].iloc[:5]:{X[feature_name].iloc[:5]}")
+    sorted_values = X[feature_name].sort_values(ascending=True)
+    logger.debug(f"type(sorted_values):{type(sorted_values)}, sorted_values.iloc[:5]:{sorted_values.iloc[:5]}")
+    logger.debug(f"type(sorted_values.shift()):{type(sorted_values.shift())}, sorted_values.shift().iloc[:5]:{sorted_values.shift().iloc[:5]}")
+    logger.debug(f"type(sorted_values.shift(periods=1)):{type(sorted_values.shift(periods=1))}, sorted_values.shift(periods=1).iloc[:5]:{sorted_values.shift(periods=1).iloc[:5]}")
+    values_diff = abs(sorted_values - sorted_values.shift(periods=1))
+    logger.debug(f"values_diff = abs(sorted_values - sorted_values.shift(periods=1)): values_diff.describe():{values_diff.describe()}")
+    logger.debug(f"values_diff[values_diff > 0].describe():{values_diff[values_diff > 0].describe()}")
+    interval = values_diff[values_diff > 0].min()
+    logger.debug(F"interval = values_diff[values_diff > 0].min():{values_diff[values_diff > 0].min()}")
+    logger.debug(F"lb=-interval / 2:{-interval / 2}, ub=interval / 2:{interval / 2}")
+    
     np.random.seed(123)
-    rug = X.apply(
-        lambda row: row[feature_name]
-        + np.random.uniform(
-            -values_diff[values_diff > 0].min() / 2,
-            values_diff[values_diff > 0].min() / 2,
-        ),
-        axis=1,
-    )
+    rug = X.apply(lambda row: row[feature_name]+ np.random.uniform(low=-interval / 2, high=interval / 2,),axis=1,)
+    logger.debug(f"X[feature_name].shape:{X[feature_name].shape}, type(X[feature_name]):{type(X[feature_name])}, X[feature_name].iloc[:5]:{X[feature_name].iloc[:5]}")
+    logger.debug(f"rug.shape:{rug.shape}, type(rug):{type(rug)}, rug.iloc[:5]:{rug.iloc[:5]}")
 
     if fig is None and ax is None:
         fig, ax = plt.subplots(figsize=(8, 4))
-    ax.plot(res_df[["eff"]])
+    ax.plot(res_df.loc[:,["eff"]], color="tab:blue")
+    # ax.plot(np.arange(res_df.shape[0]), res_df.loc[:,["eff"]])
+    logger.debug(f"type(res_df[['eff']]):{type(res_df[['eff']])}")
+    logger.debug(f"res_df.drop('size', axis=1).shape:{res_df.drop('size', axis=1).shape}, res_df.drop('size', axis=1).head():{res_df.drop('size', axis=1).head()}")
+    logger.debug(f"res_df.drop('size', axis=1).min().min():{res_df.drop('size', axis=1).min().min()}")
+    rug_list = [res_df.drop('size', axis=1).min().min()] * len(rug)
+    logger.debug(f"len(rug):{len(rug)}, len(rug_list):{len(rug_list)}, rug_list[:5]:{rug_list[:5]}")
+    
     tr = mtrans.offset_copy(ax.transData, fig=fig, x=0.0, y=-5, units="points")
     ax.plot(
         rug,
-        [res_df.drop("size", axis=1).min().min()] * len(rug),
+        rug_list,
         "|",
-        color="k",
+        color="tab:olive",
         alpha=0.2,
         transform=tr,
     )
     lowerCI_name = res_df.columns[res_df.columns.str.contains("lowerCI")]
+    logger.debug(F"lowerCI_name[0]:{lowerCI_name[0]}, lowerCI_name:{lowerCI_name},")
     upperCI_name = res_df.columns[res_df.columns.str.contains("upperCI")]
+    logger.debug(F"upperCI_name[0]:{upperCI_name[0]}, upperCI_name:{upperCI_name}")
     if (len(lowerCI_name) == 1) and (len(upperCI_name) == 1):
         label = lowerCI_name.str.split("_")[0][1] + " confidence interval"
+        logger.debug(f"label:{label}")
         ax.fill_between(
             res_df.index,
             y1=res_df[lowerCI_name[0]],
             y2=res_df[upperCI_name[0]],
-            alpha=0.2,
-            color="grey",
+            alpha=0.3,
+            color="tab:cyan",
             label=label,
         )
         ax.legend()
     ax.set_xlabel(res_df.index.name)
     ax.set_ylabel("Effect on prediction (centered)")
     ax.set_title("1D ALE Plot - Continuous")
+    
+    logger.info(F"Ending of {plot_1D_continuous_eff.__qualname__}")
+    log_disable()
     return fig, ax
 
 
