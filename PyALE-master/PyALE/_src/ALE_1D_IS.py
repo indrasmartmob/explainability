@@ -131,6 +131,8 @@ def aleplot_1D_continuous(X:pd.DataFrame, model, feature:str, grid_size:int=20, 
     res_df["weighted_mean_of_accumulated_local_mean_effects"] = res_df["proportional_weight_times_mid_point_of_two_consecutive_acuumulated_local_mean_effects"].sum()
     res_df["Weighted_mean_centered_ALE"]=res_df["Accumulated_local_mean_effects"]-res_df["weighted_mean_of_accumulated_local_mean_effects"]
     logger.debug(f"Weighted_mean_centered_ALE:::res_df.shape:{res_df.shape}, res_df.head():{res_df.head()}")
+    res_df["eff"] = res_df["Weighted_mean_centered_ALE"]
+    logger.debug(f"added eff=Weighted_mean_centered_ALE for continuity with other dependencies:::res_df.shape:{res_df.shape}, res_df.head():{res_df.head()}")
 
     if include_CI:
         ci_est = local_effects_df.groupby(feature, axis=0, observed=False)["Local_Effects"].agg(
@@ -142,12 +144,23 @@ def aleplot_1D_continuous(X:pd.DataFrame, model, feature:str, grid_size:int=20, 
         logger.debug(f"Before Merging Confidence Intervals with ALE table shape:::res_df.shape:{res_df.shape}")
         res_df = res_df.merge(ci_est, how="left", left_index=True, right_index=True, validate="one_to_one")
         logger.debug(f"After Merging Confidence Intervals with ALE table shape:::res_df.shape:{res_df.shape}")
-        lowerCI_name = "lowerCI_" + str(int(C * 100)) + "%"
-        upperCI_name = "upperCI_" + str(int(C * 100)) + "%"
-        for colname in ["local_mean_effects", "Accumulated_local_mean_effects", "Weighted_mean_centered_ALE"]:
-            res_df[f"{lowerCI_name}_{colname}"] = res_df[colname]-res_df["CI_estimate"]
-            res_df[f"{upperCI_name}_{colname}"] = res_df[colname]+res_df["CI_estimate"]
+        lowerCI_name_prefix = "lowerCI_" + str(int(C * 100)) + "%"
+        upperCI_name_prefix = "upperCI_" + str(int(C * 100)) + "%"
+        for colname in ["local_mean_effects", "Accumulated_local_mean_effects", "Weighted_mean_centered_ALE", "eff"]:
+
+            if colname=="eff":
+                lowerCI_name = f"{lowerCI_name_prefix}"
+                upperCI_name = f"{upperCI_name_prefix}"
+            else:
+                lowerCI_name = f"{lowerCI_name_prefix}_{colname}"
+                upperCI_name = f"{upperCI_name_prefix}_{colname}"           
+
+            res_df[f"{lowerCI_name}"] = res_df[colname]-res_df["CI_estimate"]
+            res_df[f"{upperCI_name}"] = res_df[colname]+res_df["CI_estimate"]
     logger.debug(f"Confidence Intervals Added for all relevant columns:::res_df.shape:{res_df.shape}, res_df.head():{res_df.head()}")
+    rel_cols = ["eff", "size", lowerCI_name_prefix, upperCI_name_prefix]
+    logger.debug(f"Desired output:::res_df.shape:{res_df.shape}, res_df.loc[:,rel_cols].head():{res_df.loc[:,rel_cols].head()}")
+    log_disable()
     logger.info(F"Ending of {aleplot_1D_continuous.__qualname__}")
     return res_df
 
