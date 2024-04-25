@@ -7,10 +7,14 @@ from ..logfile import logger, log_enable, log_disable
 
 from .lib import quantile_ied, CI_estimate, order_groups
 
-def fn_check(disable=False):
-    logger.info("This line will not come if logger.disable is done in the start of the file")
-    if disable==True:
-        logger.disable("PyALE")
+def fn_check(verbose=True):
+    if verbose==True:
+        log_enable()
+    elif verbose==False:
+        log_disable()
+    else :
+        log_disable()
+
     logger.info("In the fn_check method")
     logger.trace("A trace message.")
     logger.debug("A debug message.")
@@ -19,6 +23,7 @@ def fn_check(disable=False):
     logger.warning("A warning message.")
     logger.error("An error message.")
     logger.critical("A critical message.")
+    log_disable()
     return None
 
 
@@ -164,8 +169,7 @@ def aleplot_1D_continuous(X:pd.DataFrame, model, feature:str, grid_size:int=20, 
     logger.info(F"Ending of {aleplot_1D_continuous.__qualname__}")
     return res_df
 
-
-def aleplot_1D_discrete(X, model, feature, include_CI=True, C=0.95):
+def aleplot_1D_discrete(X:pd.DataFrame, model, feature:str, include_CI:bool=True, C:float=0.95, verbose:bool=False):
     """Compute the accumulated local effect of a numeric discrete feature.
 
     This function computes the difference in prediction when the value of the feature
@@ -182,37 +186,71 @@ def aleplot_1D_discrete(X, model, feature, include_CI=True, C=0.95):
 
     Return: A pandas DataFrame containing for each value of the feature: the size
     of the sample in it and the accumulated centered effect around this value.
+
     """
+    if verbose==True:
+        log_enable()
+    elif verbose==False:
+        log_disable()
+    else :
+        log_disable()
+    
+    logger.info(F"Starting of {aleplot_1D_discrete.__qualname__}")
+    logger.warning(F"Start: Data types check of the function")
+    if type(X)!=type(pd.DataFrame()):
+        raise TypeError(f"type of X should be a {type(pd.DataFrame())}")
+    
+    if type(feature)!=type('str'):
+        raise TypeError(f"type of feature should be a {type('str')}")
+    
+    logger.warning(F"End: Data types check of the function")
 
     groups = X[feature].unique()
+    logger.debug(F"type(groups):{type(groups)}")
+    logger.debug(F"Count of unique values: {len(groups)}")
     groups.sort()
+    logger.debug(F"len(groups):{len(groups)}, Unique values of groups:{groups}")
 
     groups_codes = {groups[x]: x for x in range(len(groups))}
+    logger.debug(F"len(groups_codes):{len(groups_codes)}, Unique values of groups_codes:{groups_codes}")
     feature_codes = X[feature].replace(groups_codes).astype(int)
+    logger.debug(F"type(feature_codes):{type(feature_codes)}, feature_codes.iloc[:5]:{feature_codes.iloc[:5]}")
 
     groups_counts = X.groupby(feature, observed=False).size()
+    logger.debug(F"type(groups_counts):{type(groups_counts)}, groups_counts.iloc[:5]:{groups_counts.iloc[:5]}")
     groups_props = groups_counts / sum(groups_counts)
+    logger.debug(F"type(groups_props):{type(groups_props)}, groups_props.iloc[:5]:{groups_props.iloc[:5]}")
 
     K = len(groups)
+    logger.debug(F"len(groups):{len(groups)}")
 
     # create copies of the dataframe
     X_plus = X.copy()
     X_neg = X.copy()
     # all groups except last one
     last_group = groups[K - 1]
+    logger.debug(F"last_group:{last_group}")
     ind_plus = X[feature] != last_group
     # all groups except first one
     first_group = groups[0]
+    logger.debug(F"first_group:{first_group}")
     ind_neg = X[feature] != first_group
     # replace once with one level up
     X_plus.loc[ind_plus, feature] = groups[feature_codes[ind_plus] + 1]
     # replace once with one level down
     X_neg.loc[ind_neg, feature] = groups[feature_codes[ind_neg] - 1]
+    logger.debug(F"X_neg.loc[:,feature].head():{X_neg.loc[:,feature].head()}")
+    logger.debug(F"X.loc[:,feature].head():{X.loc[:,feature].head()}")
+    logger.debug(F"X_plus.loc[:,feature].head():{X_plus.loc[:,feature].head()}")
     try:
         # predict with original and with the replaced values
         y_hat = model.predict(X).ravel()
         y_hat_plus = model.predict(X_plus[ind_plus]).ravel()
         y_hat_neg = model.predict(X_neg[ind_neg]).ravel()
+        logger.debug(F"type(y_hat_neg):{type(y_hat_neg)}, y_hat_neg.shape:{y_hat_neg.shape}, y_hat_neg[0:5]:{y_hat_neg[0:5]}")
+        logger.debug(F"type(y_hat):{type(y_hat)}, y_hat.shape:{y_hat.shape}, y_hat[0:5]:{y_hat[0:5]}")
+        logger.debug(F"type(y_hat_plus):{type(y_hat_plus)}, y_hat_plus.shape:{y_hat_plus.shape}, y_hat_plus[0:5]:{y_hat_plus[0:5]}")
+        
     except Exception as ex:
         raise Exception(
             "Please check that your model is fitted, and accepts X as input."
@@ -220,23 +258,32 @@ def aleplot_1D_discrete(X, model, feature, include_CI=True, C=0.95):
 
     # compute prediction difference
     Delta_plus = y_hat_plus - y_hat[ind_plus]
+    logger.debug(F"Delta_plus.shape:{Delta_plus.shape}, y_hat_plus.shape:{y_hat_plus.shape}, y_hat[ind_plus].shape:{y_hat[ind_plus].shape}")
     Delta_neg = y_hat[ind_neg] - y_hat_neg
+    logger.debug(F"Delta_neg.shape:{Delta_neg.shape}, y_hat[ind_neg].shape:{y_hat[ind_neg].shape}, y_hat_neg.shape:{y_hat_neg.shape}")
 
     # compute the mean of the difference per group
-    delta_df = pd.concat(
-        [
-            pd.DataFrame(
-                {"eff": Delta_plus, feature: groups[feature_codes[ind_plus] + 1]}
-            ),
-            pd.DataFrame({"eff": Delta_neg, feature: groups[feature_codes[ind_neg]]}),
-        ]
-    )
+    Delta_plus_df = pd.DataFrame({"eff": Delta_plus, feature: groups[feature_codes[ind_plus] + 1]})
+    Delta_neg_df = pd.DataFrame({"eff": Delta_neg, feature: groups[feature_codes[ind_neg]]})
+    delta_df = pd.concat([Delta_plus_df, Delta_neg_df], axis=0)
+    plus_count = Delta_plus_df.groupby([feature], observed=False).size()
+    neg_count = Delta_neg_df.groupby([feature], observed=False).size()
+    all_count = delta_df.groupby([feature], observed=False).size()
+    logger.debug(F"plus_count.head():{plus_count.head()}")
+    logger.debug(F"neg_count.head():{neg_count.head()}")
+    logger.debug(F"all_count.head():{all_count.head()}")
     res_df = delta_df.groupby([feature], observed=False).mean()
+    logger.debug(F"After calculating the local mean effects: res_df.head():{res_df.head()}")
     res_df["eff"] = res_df["eff"].cumsum()
+    logger.debug(F"After calculating the cumulative local mean effects: res_df.head():{res_df.head()}")
     res_df.loc[groups[0]] = 0
+    logger.debug(F"After adding starting 0 index with 0 values: res_df.head():{res_df.head()}")
     res_df = res_df.sort_index()
+    logger.debug(F"After sorting by index: res_df.head():{res_df.head()}")
     res_df["eff"] = res_df["eff"] - sum(res_df["eff"] * groups_props)
+    logger.debug(F"After subtracting the weighted mean from cumulative local mean effects: res_df.head():{res_df.head()}")
     res_df["size"] = groups_counts
+    logger.debug(F"After including the weight in the dataframe: res_df.head():{res_df.head()}")
     if include_CI:
         ci_est = delta_df.groupby([feature], observed=False).eff.agg(
             [("CI_estimate", lambda x: CI_estimate(x, C=C))]
@@ -247,6 +294,10 @@ def aleplot_1D_discrete(X, model, feature, include_CI=True, C=0.95):
         res_df[upperCI_name] = upperCI = res_df[["eff"]].add(
             ci_est["CI_estimate"], axis=0
         )
+    
+    
+    log_disable()
+    logger.info(F"Ending of {aleplot_1D_discrete.__qualname__}")
     return res_df
 
 
