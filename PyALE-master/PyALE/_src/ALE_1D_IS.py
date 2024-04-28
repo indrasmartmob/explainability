@@ -264,11 +264,11 @@ def aleplot_1D_discrete(X:pd.DataFrame, model, feature:str, include_CI:bool=True
 
     # compute the mean of the difference per group
     logger.debug(F"type(groups):{type(groups)}, groups.shape:{groups.shape}, groups:{groups}")
-    Delta_plus_df = pd.DataFrame({"eff": Delta_plus, feature: groups[feature_codes[ind_plus] + 1]})
+    Delta_plus_df = pd.DataFrame({"Local_Effects": Delta_plus, feature: groups[feature_codes[ind_plus] + 1]})
     logger.debug(f"len(feature_codes[ind_plus]):{len(feature_codes[ind_plus])}, feature_codes[ind_plus].iloc[0:5]:{feature_codes[ind_plus].iloc[0:5]}")
     logger.debug(f"type(feature_codes[ind_plus] + 1):{type(feature_codes[ind_plus] + 1)}, len(feature_codes[ind_plus] + 1):{len(feature_codes[ind_plus] + 1)}, [feature_codes[ind_plus].to_numpy() + 1][0:5]:{[feature_codes[ind_plus].to_numpy() + 1][0:5]}")
     logger.debug(f"type(groups[feature_codes[ind_plus] + 1]):{type(groups[feature_codes[ind_plus] + 1])}, len(groups[feature_codes[ind_plus] + 1]):{len(groups[feature_codes[ind_plus] + 1])}, groups[feature_codes[ind_plus] + 1][0:5]:{groups[feature_codes[ind_plus] + 1][0:5]}")
-    Delta_neg_df = pd.DataFrame({"eff": Delta_neg, feature: groups[feature_codes[ind_neg]]})
+    Delta_neg_df = pd.DataFrame({"Local_Effects": Delta_neg, feature: groups[feature_codes[ind_neg]]})
     logger.debug(f"len(feature_codes[ind_neg]):{len(feature_codes[ind_neg])}, feature_codes[ind_neg].iloc[0:5]:{feature_codes[ind_neg].iloc[0:5]}")
     logger.debug(f"type(feature_codes[ind_neg]):{type(feature_codes[ind_neg])}, len(feature_codes[ind_neg]):{len(feature_codes[ind_neg])}, [feature_codes[ind_neg].values()][0:5]:{[feature_codes[ind_neg].to_numpy()][0:5]}")
     logger.debug(f"type(groups[feature_codes[ind_neg]]):{type(groups[feature_codes[ind_neg]])}, len(groups[feature_codes[ind_neg]]):{len(groups[feature_codes[ind_neg]])}, groups[feature_codes[ind_neg]][0:5]:{groups[feature_codes[ind_neg]][0:5]}")
@@ -284,26 +284,63 @@ def aleplot_1D_discrete(X:pd.DataFrame, model, feature:str, include_CI:bool=True
     logger.debug(F"After merging all the counts--all_count.head():{all_count.head()}")
     res_df = delta_df.groupby([feature], observed=False).mean()
     logger.debug(F"After calculating the local mean effects: res_df.head():{res_df.head()}")
-    res_df["eff"] = res_df["eff"].cumsum()
+    res_df.rename(columns={"Local_Effects":"local_mean_effects"}, inplace=True)
+    logger.debug(F"After renaming Local_Effects to local mean effects: res_df.head():{res_df.head()}")
+    res_df["Accumulated_local_mean_effects"] = res_df["local_mean_effects"].cumsum()
     logger.debug(F"After calculating the cumulative local mean effects: res_df.head():{res_df.head()}")
     res_df.loc[groups[0]] = 0
-    logger.debug(F"After adding starting 0 index with 0 values: res_df.head():{res_df.head()}")
+    logger.debug(F"After adding minimum value as index with 0 values: res_df.head():{res_df.head()}")
     res_df = res_df.sort_index()
     logger.debug(F"After sorting by index: res_df.head():{res_df.head()}")
-    res_df["eff"] = res_df["eff"] - sum(res_df["eff"] * groups_props)
-    logger.debug(F"After subtracting the weighted mean from cumulative local mean effects: res_df.head():{res_df.head()}")
-    res_df["size"] = groups_counts
+    res_df["size"]=groups_counts
+    res_df["Weight"]=res_df["size"]
+    res_df["proportional_weight"] = res_df["Weight"]/res_df["Weight"].sum()
     logger.debug(F"After including the weight in the dataframe: res_df.head():{res_df.head()}")
+    res_df["weighted_mean_of_accumulated_local_mean_effects"] = sum(res_df["Accumulated_local_mean_effects"] * res_df["proportional_weight"])
+    res_df["Weighted_mean_centered_ALE"] = res_df["Accumulated_local_mean_effects"] - res_df["weighted_mean_of_accumulated_local_mean_effects"]
+    logger.debug(F"After subtracting the weighted mean from cumulative local mean effects: res_df.head():{res_df.head()}")
+    all_count.index = all_count[feature]
+    logger.debug(F"Convert the index as per {feature} column: all_count.head():{all_count.head()}")
+    res_df = res_df.merge(all_count, how="left", left_index=True, right_index=True, validate="one_to_one")
+    res_df["size_original"] = res_df["size"]
+    # res_df["size_original_shift(1)"] = res_df["size_original"].shift(1, fill_value=0)
+    res_df["size_original_shift(1)"] = res_df["size_original"].shift(1)
+    res_df["Actual_Weight"] = res_df["size_original"] + res_df["size_original_shift(1)"]
+    res_df["Actual_Weight"].fillna(0, inplace=True)
+    res_df["Used_Weight_for_eff"]=res_df["size"]
+    res_df["Actual_proportional_weight"] = res_df["Actual_Weight"]/res_df["Actual_Weight"].sum()
+    res_df["Actual_weighted_mean_of_accumulated_local_mean_effects"] = sum(res_df["Accumulated_local_mean_effects"] * res_df["Actual_proportional_weight"])
+    res_df["Actual_Weighted_mean_centered_ALE"] = res_df["Accumulated_local_mean_effects"] - res_df["Actual_weighted_mean_of_accumulated_local_mean_effects"]
+    logger.debug(f"After adding Actual Weight using which Local effects and Confidence Interval are calculated:res_df.head():{res_df.head()}")
+    res_df["eff"] = res_df["Weighted_mean_centered_ALE"]
+    logger.debug(f"added eff=Weighted_mean_centered_ALE for continuity with other dependencies:::res_df.shape:{res_df.shape}, res_df.head():{res_df.head()}")    
+
     if include_CI:
-        ci_est = delta_df.groupby([feature], observed=False).eff.agg(
+        ci_est = delta_df.groupby(feature, axis=0, observed=False)["Local_Effects"].agg(
             [("CI_estimate", lambda x: CI_estimate(x, C=C))]
         )
-        lowerCI_name = "lowerCI_" + str(int(C * 100)) + "%"
-        upperCI_name = "upperCI_" + str(int(C * 100)) + "%"
-        res_df[lowerCI_name] = res_df[["eff"]].subtract(ci_est["CI_estimate"], axis=0)
-        res_df[upperCI_name] = upperCI = res_df[["eff"]].add(
-            ci_est["CI_estimate"], axis=0
-        )
+        logger.debug(f"Before Sorting Index:::ci_est.shape:{ci_est.shape}, ci_est.head(): {ci_est.head()}")
+        ci_est = ci_est.sort_index()
+        logger.debug(f"After Sorting Index:::ci_est.shape:{ci_est.shape}, ci_est.head(): {ci_est.head()}")
+        logger.debug(f"Before Merging Confidence Intervals with ALE table shape:::res_df.shape:{res_df.shape}")
+        res_df = res_df.merge(ci_est, how="left", left_index=True, right_index=True, validate="one_to_one")
+        logger.debug(f"After Merging Confidence Intervals with ALE table shape:::res_df.shape:{res_df.shape}")
+        lowerCI_name_prefix = "lowerCI_" + str(int(C * 100)) + "%"
+        upperCI_name_prefix = "upperCI_" + str(int(C * 100)) + "%"
+        for colname in ["local_mean_effects", "Accumulated_local_mean_effects", "Weighted_mean_centered_ALE", "Actual_Weighted_mean_centered_ALE", "eff"]:
+
+            if colname=="eff":
+                lowerCI_name = f"{lowerCI_name_prefix}"
+                upperCI_name = f"{upperCI_name_prefix}"
+            else:
+                lowerCI_name = f"{lowerCI_name_prefix}_{colname}"
+                upperCI_name = f"{upperCI_name_prefix}_{colname}"           
+
+            res_df[f"{lowerCI_name}"] = res_df[colname]-res_df["CI_estimate"]
+            res_df[f"{upperCI_name}"] = res_df[colname]+res_df["CI_estimate"]
+    logger.debug(f"Confidence Intervals Added for all relevant columns:::res_df.shape:{res_df.shape}, res_df.head():{res_df.head()}")
+    rel_cols = ["eff", "size", lowerCI_name_prefix, upperCI_name_prefix]
+    logger.debug(f"Desired output:::res_df.shape:{res_df.shape}, res_df.loc[:,rel_cols].head():{res_df.loc[:,rel_cols].head()}")
     
     
     log_disable()
