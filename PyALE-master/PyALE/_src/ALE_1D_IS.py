@@ -305,8 +305,8 @@ def aleplot_1D_discrete(X:pd.DataFrame, model, feature:str, include_CI:bool=True
     res_df["size_original"] = res_df["size"]
     # res_df["size_original_shift(1)"] = res_df["size_original"].shift(1, fill_value=0)
     res_df["size_original_shift(1)"] = res_df["size_original"].shift(1)
-    res_df["Actual_Weight"] = res_df["size_original"] + res_df["size_original_shift(1)"]
-    res_df["Actual_Weight"].fillna(0, inplace=True)
+    res_df["consecutive_sizes_sum"] = res_df["size_original"] + res_df["size_original_shift(1)"]
+    res_df["Actual_Weight"] = res_df["consecutive_sizes_sum"].fillna(0)
     res_df["Used_Weight_for_eff"]=res_df["size"]
     res_df["Actual_proportional_weight"] = res_df["Actual_Weight"]/res_df["Actual_Weight"].sum()
     res_df["Actual_weighted_mean_of_accumulated_local_mean_effects"] = sum(res_df["Accumulated_local_mean_effects"] * res_df["Actual_proportional_weight"])
@@ -585,7 +585,7 @@ def plot_1D_continuous_eff2(res_df, X, gap=0.2, fig=None, ax=None, verbose=False
     else :
         log_disable()
 
-    logger.info(F"Starting of {plot_1D_continuous_eff.__qualname__}")
+    logger.info(F"Starting of {plot_1D_continuous_eff2.__qualname__}")
     logger.debug(F"res_df.shape:{res_df.shape}, res_df.head():{res_df.head()}")
     logger.debug(F"X.shape:{X.shape}, X.head():{X.head()}")
     feature_name = res_df.index.name
@@ -657,12 +657,12 @@ def plot_1D_continuous_eff2(res_df, X, gap=0.2, fig=None, ax=None, verbose=False
     ax.set_ylabel("Effect on prediction (centered)")
     ax.set_title("1D ALE Plot - Continuous")
     
-    logger.info(F"Ending of {plot_1D_continuous_eff.__qualname__}")
+    logger.info(F"Ending of {plot_1D_continuous_eff2.__qualname__}")
     log_disable()
     return fig, ax
 
 
-def plot_1D_discrete_eff(res_df, X, fig=None, ax=None):
+def plot_1D_discrete_eff(res_df, X, fig=None, ax=None, verbose=False):
     """Plot the 1D ALE plot for a discrete feature.
 
     Arguments:
@@ -671,6 +671,16 @@ def plot_1D_discrete_eff(res_df, X, fig=None, ax=None):
     X -- The dataset used to compute the effects.
     fig, ax -- matplotlib figure and axis.
     """
+    if verbose==True:
+        log_enable()
+    elif verbose==False:
+        log_disable()
+    else :
+        log_disable()
+
+    logger.info(F"Starting of {plot_1D_discrete_eff.__qualname__}")
+    logger.debug(F"res_df.shape:{res_df.shape}, res_df.head():{res_df.head()}")
+    logger.debug(F"X.shape:{X.shape}, X.head():{X.head()}")
 
     feature_name = res_df.index.name
     if fig is None and ax is None:
@@ -697,4 +707,69 @@ def plot_1D_discrete_eff(res_df, X, fig=None, ax=None):
     ax2.tick_params(axis="y", labelcolor="lightblue")
     ax2.set_title("1D ALE Plot - Discrete/Categorical")
     fig.tight_layout()
+
+    logger.info(F"Ending of {plot_1D_discrete_eff.__qualname__}")
+    log_disable()    
     return fig, ax, ax2
+
+def plot_1D_discrete_eff2(res_df, X, fig=None, ax=None, verbose=False):
+    """Plot the 1D ALE plot for a discrete feature.
+
+    Arguments:
+    res_df -- A pandas DataFrame with the computed effects
+    (the output of ale_1D_discrete).
+    X -- The dataset used to compute the effects.
+    fig, ax -- matplotlib figure and axis.
+    """
+    if verbose==True:
+        log_enable()
+    elif verbose==False:
+        log_disable()
+    else :
+        log_disable()
+
+    logger.info(F"Starting of {plot_1D_discrete_eff2.__qualname__}")
+    logger.debug(F"res_df.shape:{res_df.shape}, res_df.head():{res_df.head()}")
+    logger.debug(F"X.shape:{X.shape}, X.head():{X.head()}")
+
+    feature_name = res_df.index.name
+    logger.debug(F"feature_name:{feature_name}")
+    if fig is None and ax is None:
+        fig, ax = plt.subplots(figsize=(8, 4))
+    ax.set_xlabel(feature_name, color="tab:blue")
+    ax.tick_params(axis="x", labelcolor="tab:blue")
+    ax.set_ylabel("Effect on prediction (centered)", color="tab:blue")
+    ax.tick_params(axis="y", labelcolor="tab:blue")
+    yerr = 0
+    lowerCI_name = res_df.columns[res_df.columns.str.contains("lowerCI")]
+    logger.debug(F"lowerCI_name:{lowerCI_name}, len(lowerCI_name):{len(lowerCI_name)}")
+    upperCI_name = res_df.columns[res_df.columns.str.contains("upperCI")]
+    logger.debug(F"upperCI_name:{upperCI_name}, len(upperCI_name):{len(upperCI_name)}")
+    if (len(lowerCI_name) == 1) and (len(upperCI_name) == 1):
+        logger.debug(F"Within if condition: (len(lowerCI_name) == 1) and (len(upperCI_name) == 1):{(len(lowerCI_name) == 1) and (len(upperCI_name) == 1)}")
+        yerr_df = res_df[upperCI_name].subtract(res_df["eff"], axis=0)
+        logger.debug(F"type(yerr_df):{type(yerr_df)}, yerr_df.head():{yerr_df.head()}")
+        yerr_series = res_df[upperCI_name].subtract(res_df["eff"], axis=0).iloc[:, 0]
+        logger.debug(F"type(yerr_series):{type(yerr_series)}, yerr_series.iloc[0:5]:{yerr_series.iloc[0:5]}")
+    ax.errorbar(
+        res_df.index.astype(str),
+        res_df["eff"],
+        yerr=yerr_series,
+        uplims = True,
+        lolims = True,
+        capsize=3,
+        marker="^",
+        linestyle="dashed",
+        color="tab:blue",
+    )
+    ax2 = ax.twinx()
+    ax2.set_ylabel("Size", color="tab:olive")
+    ax2.bar(res_df.index.astype(str), res_df["size"], alpha=0.1, align="center", color="tab:olive")
+    ax2.tick_params(axis="y", labelcolor="tab:olive")
+    ax2.set_title("1D ALE Plot - Discrete/Categorical")
+    fig.tight_layout()
+
+    logger.info(F"Ending of {plot_1D_discrete_eff2.__qualname__}")
+    log_disable()    
+    return fig, ax, ax2
+
