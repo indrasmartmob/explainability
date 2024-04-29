@@ -683,19 +683,26 @@ def plot_1D_discrete_eff(res_df, X, fig=None, ax=None, verbose=False):
     logger.debug(F"X.shape:{X.shape}, X.head():{X.head()}")
 
     feature_name = res_df.index.name
+    logger.debug(F"feature_name:{feature_name}")
     if fig is None and ax is None:
         fig, ax = plt.subplots(figsize=(8, 4))
     ax.set_xlabel(feature_name)
     ax.set_ylabel("Effect on prediction (centered)")
-    yerr = 0
+    yerr_series = 0
     lowerCI_name = res_df.columns[res_df.columns.str.contains("lowerCI")]
+    logger.debug(F"lowerCI_name:{lowerCI_name}, len(lowerCI_name):{len(lowerCI_name)}")
     upperCI_name = res_df.columns[res_df.columns.str.contains("upperCI")]
+    logger.debug(F"upperCI_name:{upperCI_name}, len(upperCI_name):{len(upperCI_name)}")
     if (len(lowerCI_name) == 1) and (len(upperCI_name) == 1):
-        yerr = res_df[upperCI_name].subtract(res_df["eff"], axis=0).iloc[:, 0]
+        logger.debug(F"Within if condition: (len(lowerCI_name) == 1) and (len(upperCI_name) == 1):{(len(lowerCI_name) == 1) and (len(upperCI_name) == 1)}")
+        yerr_df = res_df[upperCI_name].subtract(res_df["eff"], axis=0)
+        logger.debug(F"type(yerr_df):{type(yerr_df)}, yerr_df.head():{yerr_df.head()}")
+        yerr_series = res_df[upperCI_name].subtract(res_df["eff"], axis=0).iloc[:, 0]
+        logger.debug(F"type(yerr_series):{type(yerr_series)}, yerr_series.iloc[0:5]:{yerr_series.iloc[0:5]}")
     ax.errorbar(
         res_df.index.astype(str),
         res_df["eff"],
-        yerr=yerr,
+        yerr=yerr_series,
         capsize=3,
         marker="o",
         linestyle="dashed",
@@ -740,7 +747,7 @@ def plot_1D_discrete_eff2(res_df, X, fig=None, ax=None, verbose=False):
     ax.tick_params(axis="x", labelcolor="tab:blue")
     ax.set_ylabel("Effect on prediction (centered)", color="tab:blue")
     ax.tick_params(axis="y", labelcolor="tab:blue")
-    yerr = 0
+    yerr_series = 0
     lowerCI_name = res_df.columns[res_df.columns.str.contains("lowerCI")]
     logger.debug(F"lowerCI_name:{lowerCI_name}, len(lowerCI_name):{len(lowerCI_name)}")
     upperCI_name = res_df.columns[res_df.columns.str.contains("upperCI")]
